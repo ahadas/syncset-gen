@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -86,11 +87,10 @@ func loadResources(path string) ([]runtime.RawExtension, error) {
 					return err
 				}
 
-				unified := string(data)
-				all := strings.Split(unified, "---")
+				all := bytes.Split(data, []byte("---"))
 
 				for _, y := range all {
-					jsonBytes, err := yaml.YAMLToJSON([]byte(y))
+					jsonBytes, err := yaml.YAMLToJSON(y)
 					if err != nil {
 						return err
 					}
