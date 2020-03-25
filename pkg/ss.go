@@ -74,7 +74,7 @@ func loadSecrets(name, prefix, path string) ([]hivev1.SecretMapping, error) {
 }
 
 
-func loadResources(path string) ([]runtime.RawExtension, error) {
+func loadResourcesFromPath(path string) ([]runtime.RawExtension, error) {
 	var resources = []runtime.RawExtension{}
 	if path == "" {
 		return resources, nil
@@ -89,28 +89,38 @@ func loadResources(path string) ([]runtime.RawExtension, error) {
 				if err != nil {
 					return err
 				}
-				yamlsBytes := bytes.Split(data, yamlSeparator)
-				for _, yamlBytes := range yamlsBytes {
-					jsonBytes, err := yaml.YAMLToJSON(yamlBytes)
-					if err != nil {
-						return err
-					}
-					var j map[string]interface{}
-					json.Unmarshal(jsonBytes, &j)
-					kind, ok := j["kind"].(string)
-					if ok && kind != "Secret" {
-						var r = runtime.RawExtension{}
-						err = r.UnmarshalJSON(jsonBytes)
-						if err != nil {
-							return err
-						}
-						resources = append(resources, r)
-					}
+				fileResources, err := loadResources(data)
+				if err != nil {
+					return err
 				}
+				resources = append(resources, fileResources...)
 			}
 			return nil
 		})
 	return resources, err
+}
+
+func loadResources(data []byte) ([]runtime.RawExtension, error) {
+	var resources = []runtime.RawExtension{}
+	yamlsBytes := bytes.Split(data, yamlSeparator)
+	for _, yamlBytes := range yamlsBytes {
+		jsonBytes, err := yaml.YAMLToJSON(yamlBytes)
+		if err != nil {
+			return nil, err
+		}
+		var j map[string]interface{}
+		json.Unmarshal(jsonBytes, &j)
+		kind, ok := j["kind"].(string)
+		if ok && kind != "Secret" {
+			var r = runtime.RawExtension{}
+			err = r.UnmarshalJSON(jsonBytes)
+			if err != nil {
+				return nil, err
+			}
+			resources = append(resources, r)
+		}
+	}
+	return resources, nil
 }
 
 func loadPatches(path string) ([]hivev1.SyncObjectPatch, error) {
@@ -192,7 +202,7 @@ func TransformSecrets(name, prefix, path string) []corev1.Secret {
 }
 
 func CreateSelectorSyncSet(name string, selector string, resourcesPath string, patchesPath string) hivev1.SelectorSyncSet {
-	resources, err := loadResources(resourcesPath)
+	resources, err := loadResourcesFromPath(resourcesPath)
 	if err != nil {
 		log.Println(err)
 	}
@@ -237,7 +247,7 @@ func CreateSelectorSyncSet(name string, selector string, resourcesPath string, p
 }
 
 func CreateSyncSet(name string, clusterName string, resourcesPath string, patchesPath string) hivev1.SyncSet {
-	resources, err := loadResources(resourcesPath)
+	resources, err := loadResourcesFromPath(resourcesPath)
 	if err != nil {
 		log.Println(err)
 	}
