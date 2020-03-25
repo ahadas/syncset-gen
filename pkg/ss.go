@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/yaml"
 )
+
+var yamlSeparator = []byte("\n---")
 
 func loadSecrets(name, prefix, path string) ([]hivev1.SecretMapping, error) {
 	var secrets = []hivev1.SecretMapping{}
@@ -70,6 +73,7 @@ func loadSecrets(name, prefix, path string) ([]hivev1.SecretMapping, error) {
 	return secrets, err
 }
 
+
 func loadResources(path string) ([]runtime.RawExtension, error) {
 	var resources = []runtime.RawExtension{}
 	if path == "" {
@@ -85,20 +89,23 @@ func loadResources(path string) ([]runtime.RawExtension, error) {
 				if err != nil {
 					return err
 				}
-				jsonBytes, err := yaml.YAMLToJSON(data)
-				if err != nil {
-					return err
-				}
-				var j map[string]interface{}
-				json.Unmarshal(jsonBytes, &j)
-				kind, ok := j["kind"].(string)
-				if ok && kind != "Secret" {
-					var r = runtime.RawExtension{}
-					err = r.UnmarshalJSON(jsonBytes)
+				yamlsBytes := bytes.Split(data, yamlSeparator)
+				for _, yamlBytes := range yamlsBytes {
+					jsonBytes, err := yaml.YAMLToJSON(yamlBytes)
 					if err != nil {
 						return err
 					}
-					resources = append(resources, r)
+					var j map[string]interface{}
+					json.Unmarshal(jsonBytes, &j)
+					kind, ok := j["kind"].(string)
+					if ok && kind != "Secret" {
+						var r = runtime.RawExtension{}
+						err = r.UnmarshalJSON(jsonBytes)
+						if err != nil {
+							return err
+						}
+						resources = append(resources, r)
+					}
 				}
 			}
 			return nil
