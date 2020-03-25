@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,10 +21,12 @@ func init() {
 	viewCmd.Flags().StringVarP(&patches, "patches", "p", "", "The directory of patch manifest files to use")
 	viewCmd.Flags().StringVarP(&output, "output", "o", "json", fmt.Sprintf("Output format. One of: %v", outputPrinters))
 	viewCmd.Flags().StringVarP(&input, "input", "i", "disk", fmt.Sprintf("Input source. One of: %v", inputSources))
+	viewCmd.Flags().BoolVarP(&wait, "wait", "w", false, "Last resource needs to wait for custom resource definition to be exposed")
 	RootCmd.AddCommand(viewCmd)
 }
 
 var selector, clusterName, resources, patches, name, output, input string
+var wait bool
 
 var outputPrinters = []string{"json", "yaml"}
 var inputSources = []string{"disk", "stdin"}
@@ -60,12 +63,19 @@ var viewCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		prefix := "ss"
 		create := func()interface{} { return pkg.CreateSyncSet(args[0], clusterName, resources, patches) }
+		create2 := func()interface{} { return nil }
 		// override for selectorsyncsets
 		if sss := (clusterName == ""); sss {
 			prefix = "sss"
 			var stdin []byte
 			if input == "stdin" {
 				stdin, _ = ioutil.ReadAll(os.Stdin)
+				if wait {
+					index := bytes.LastIndex(stdin, pkg.YAMLSeparator)
+					cr := stdin[index:]
+					create2 = func()interface{} { return pkg.CreateSelectorSyncSet(args[0]+"-cr", selector, resources, patches, cr) }
+					stdin = stdin[:index]
+				}
 			}
 			create = func()interface{} { return pkg.CreateSelectorSyncSet(args[0], selector, resources, patches, stdin) }
 		}
@@ -79,7 +89,12 @@ var viewCmd = &cobra.Command{
 			fmt.Printf("%s\n", string(j))
 		}
 		ss := create()
-		fmt.Printf("%s\n\n", getOutputStr(ss))
+		fmt.Printf("%s", getOutputStr(ss))
+		if ss2 := create2(); ss2 != nil {
+			// assumed yaml output
+			fmt.Printf("---\n%s", getOutputStr(ss2))
+		}
+		fmt.Printf("\n\n")
 	},
 }
 

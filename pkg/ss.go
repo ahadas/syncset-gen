@@ -18,7 +18,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-var yamlSeparator = []byte("\n---")
+var YAMLSeparator = []byte("\n---")
 
 func loadSecrets(name, prefix, path string) ([]hivev1.SecretMapping, error) {
 	var secrets = []hivev1.SecretMapping{}
@@ -101,7 +101,7 @@ func loadResourcesFromPath(path string) ([]runtime.RawExtension, error) {
 
 func loadResources(data []byte) ([]runtime.RawExtension, error) {
 	var resources = []runtime.RawExtension{}
-	yamlsBytes := bytes.Split(data, yamlSeparator)
+	yamlsBytes := bytes.Split(data, YAMLSeparator)
 	for _, yamlBytes := range yamlsBytes {
 		jsonBytes, err := yaml.YAMLToJSON(yamlBytes)
 		if err != nil {
@@ -137,7 +137,7 @@ func loadPatches(path string) ([]hivev1.SyncObjectPatch, error) {
 				if err != nil {
 					return err
 				}
-				yamlsBytes := bytes.Split(data, yamlSeparator)
+				yamlsBytes := bytes.Split(data, YAMLSeparator)
 				for _, yamlBytes := range yamlsBytes {
 					jsonBytes, err := yaml.YAMLToJSON(yamlBytes)
 					if err != nil {
