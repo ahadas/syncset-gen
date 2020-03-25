@@ -128,13 +128,16 @@ func loadPatches(path string) ([]hivev1.SyncObjectPatch, error) {
 				if err != nil {
 					return err
 				}
-				jsonBytes, err := yaml.YAMLToJSON(data)
-				if err != nil {
-					return err
+				yamlsBytes := bytes.Split(data, yamlSeparator)
+				for _, yamlBytes := range yamlsBytes {
+					jsonBytes, err := yaml.YAMLToJSON(yamlBytes)
+					if err != nil {
+						return err
+					}
+					var p = hivev1.SyncObjectPatch{}
+					json.Unmarshal(jsonBytes, &p)
+					patches = append(patches, p)
 				}
-				var p = hivev1.SyncObjectPatch{}
-				json.Unmarshal(jsonBytes, &p)
-				patches = append(patches, p)
 			}
 			return nil
 		})
