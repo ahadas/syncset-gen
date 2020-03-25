@@ -16,7 +16,7 @@ func init() {
 	viewCmd.Flags().StringVarP(&clusterName, "cluster-name", "c", "", "The cluster name used to match the SyncSet to a Cluster")
 	viewCmd.Flags().StringVarP(&resources, "resources", "r", "", "The directory of resource manifest files to use")
 	viewCmd.Flags().StringVarP(&patches, "patches", "p", "", "The directory of patch manifest files to use")
-	viewCmd.Flags().StringVarP(&output, "output", "o", "json", "Output format. One of: json|yaml")
+	viewCmd.Flags().StringVarP(&output, "output", "o", "json", fmt.Sprintf("Output format. One of: %v", outputPrinters))
 	RootCmd.AddCommand(viewCmd)
 }
 
@@ -50,42 +50,37 @@ var viewCmd = &cobra.Command{
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		if clusterName != "" {
-			secrets := pkg.TransformSecrets(args[0], "ss", resources)
-			for _, s := range secrets {
-				j, err := json.MarshalIndent(&s, "", "    ")
-				if err != nil {
-					log.Fatalf("error: %v", err)
-				}
-				fmt.Printf("%s\n", string(j))
-			}
-			ss := pkg.CreateSyncSet(args[0], clusterName, resources, patches)
-			fmt.Printf("%s\n\n", getOutputStr(ss))
-		} else {
-			secrets := pkg.TransformSecrets(args[0], "sss", resources)
-			for _, s := range secrets {
-				j, err := json.MarshalIndent(&s, "", "    ")
-				if err != nil {
-					log.Fatalf("error: %v", err)
-				}
-				fmt.Printf("%s\n", string(j))
-			}
-			sss := pkg.CreateSelectorSyncSet(args[0], selector, resources, patches)
-			fmt.Printf("%s\n\n", getOutputStr(sss))
+		prefix := "ss"
+		create := func()interface{} { return pkg.CreateSyncSet(args[0], clusterName, resources, patches) }
+		// override for selectorsyncsets
+		if sss := (clusterName == ""); sss {
+			prefix = "sss"
+			create = func()interface{} { return pkg.CreateSelectorSyncSet(args[0], selector, resources, patches) }
 		}
+
+		secrets := pkg.TransformSecrets(args[0], prefix, resources)
+		for _, s := range secrets {
+			j, err := json.MarshalIndent(&s, "", "    ")
+			if err != nil {
+				log.Fatalf("error: %v", err)
+			}
+			fmt.Printf("%s\n", string(j))
+		}
+		ss := create()
+		fmt.Printf("%s\n\n", getOutputStr(ss))
 	},
 }
 
 // getOutputStr returns the output as json or yaml string
 func getOutputStr(ss interface{}) string {
-	var b []byte
-	var err error
+	var marshal func(interface{}) ([]byte, error)
 	switch o := output; o {
 	case "yaml":
-		b, err = yaml.Marshal(&ss)
+		marshal = func(ss interface{}) ([]byte, error) { return yaml.Marshal(&ss) }
 	default:
-		b, err = json.MarshalIndent(&ss, "", "    ")
+		marshal = func(ss interface{}) ([]byte, error) { return json.MarshalIndent(&ss, "", "    ") }
 	}
+	b, err := marshal(ss)
 	if err != nil {
 		log.Fatalf("error: %v", err)
 	}
