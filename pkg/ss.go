@@ -73,7 +73,6 @@ func loadSecrets(name, prefix, path string) ([]hivev1.SecretMapping, error) {
 	return secrets, err
 }
 
-
 func loadResourcesFromPath(path string) ([]runtime.RawExtension, error) {
 	var resources = []runtime.RawExtension{}
 	if path == "" {
@@ -201,8 +200,12 @@ func TransformSecrets(name, prefix, path string) []corev1.Secret {
 	return secrets
 }
 
-func CreateSelectorSyncSet(name string, selector string, resourcesPath string, patchesPath string) hivev1.SelectorSyncSet {
-	resources, err := loadResourcesFromPath(resourcesPath)
+func CreateSelectorSyncSet(name, selector, resourcesPath, patchesPath string, stdin []byte) hivev1.SelectorSyncSet {
+	loadResourcesFunc := func()([]runtime.RawExtension, error) { return loadResourcesFromPath(resourcesPath) }
+	if stdin != nil {
+		loadResourcesFunc = func()([]runtime.RawExtension, error) { return loadResources(stdin) }
+	}
+	resources, err := loadResourcesFunc()
 	if err != nil {
 		log.Println(err)
 	}

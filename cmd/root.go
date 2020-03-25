@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
 
 	"github.com/matt-simons/ss/pkg"
 	"github.com/spf13/cobra"
@@ -17,12 +19,14 @@ func init() {
 	viewCmd.Flags().StringVarP(&resources, "resources", "r", "", "The directory of resource manifest files to use")
 	viewCmd.Flags().StringVarP(&patches, "patches", "p", "", "The directory of patch manifest files to use")
 	viewCmd.Flags().StringVarP(&output, "output", "o", "json", fmt.Sprintf("Output format. One of: %v", outputPrinters))
+	viewCmd.Flags().StringVarP(&input, "input", "i", "disk", fmt.Sprintf("Input source. One of: %v", inputSources))
 	RootCmd.AddCommand(viewCmd)
 }
 
-var selector, clusterName, resources, patches, name, output string
+var selector, clusterName, resources, patches, name, output, input string
 
 var outputPrinters = []string{"json", "yaml"}
+var inputSources = []string{"disk", "stdin"}
 
 var RootCmd = &cobra.Command{
 	Use:   "ss",
@@ -47,6 +51,10 @@ var viewCmd = &cobra.Command{
 			return fmt.Errorf("unable to match a printer suitable for the output format %s allowed formats are: %v",
 				output, outputPrinters)
 		}
+		if !contains(inputSources, input) {
+			return fmt.Errorf("unsupported input source %s allowed input sources are: %v",
+				input, inputSources)
+		}
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
@@ -55,7 +63,11 @@ var viewCmd = &cobra.Command{
 		// override for selectorsyncsets
 		if sss := (clusterName == ""); sss {
 			prefix = "sss"
-			create = func()interface{} { return pkg.CreateSelectorSyncSet(args[0], selector, resources, patches) }
+			var stdin []byte
+			if input == "stdin" {
+				stdin, _ = ioutil.ReadAll(os.Stdin)
+			}
+			create = func()interface{} { return pkg.CreateSelectorSyncSet(args[0], selector, resources, patches, stdin) }
 		}
 
 		secrets := pkg.TransformSecrets(args[0], prefix, resources)
