@@ -7,7 +7,6 @@ import (
 	"log"
 
 	"github.com/matt-simons/ss/pkg"
-	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
 )
@@ -60,13 +59,8 @@ var viewCmd = &cobra.Command{
 				}
 				fmt.Printf("%s\n", string(j))
 			}
-			var ss hivev1.SyncSet
-			ss = pkg.CreateSyncSet(args[0], clusterName, resources, patches)
-			j, err := json.MarshalIndent(&ss, "", "    ")
-			if err != nil {
-				log.Fatalf("error: %v", err)
-			}
-			fmt.Printf("%s\n\n", string(j))
+			ss := pkg.CreateSyncSet(args[0], clusterName, resources, patches)
+			fmt.Printf("%s\n\n", getOutputStr(ss))
 		} else {
 			secrets := pkg.TransformSecrets(args[0], "sss", resources)
 			for _, s := range secrets {
@@ -76,15 +70,14 @@ var viewCmd = &cobra.Command{
 				}
 				fmt.Printf("%s\n", string(j))
 			}
-			var ss hivev1.SelectorSyncSet
-			ss = pkg.CreateSelectorSyncSet(args[0], selector, resources, patches)
-			fmt.Printf("%s\n\n", getOutputStr(ss))
+			sss := pkg.CreateSelectorSyncSet(args[0], selector, resources, patches)
+			fmt.Printf("%s\n\n", getOutputStr(sss))
 		}
 	},
 }
 
 // getOutputStr returns the output as json or yaml string
-func getOutputStr(ss hivev1.SelectorSyncSet) string {
+func getOutputStr(ss interface{}) string {
 	var b []byte
 	var err error
 	switch o := output; o {
