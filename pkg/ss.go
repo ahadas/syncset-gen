@@ -73,7 +73,7 @@ func loadSecrets(name, prefix, path string) ([]hivev1.SecretMapping, error) {
 	return secrets, err
 }
 
-func loadResourcesFromPath(path string) ([]runtime.RawExtension, error) {
+func loadResourcesFromPath(path string, parameters map[string]string) ([]runtime.RawExtension, error) {
 	var resources = []runtime.RawExtension{}
 	if path == "" {
 		return resources, nil
@@ -88,7 +88,7 @@ func loadResourcesFromPath(path string) ([]runtime.RawExtension, error) {
 				if err != nil {
 					return err
 				}
-				fileResources, err := loadResources(data)
+				fileResources, err := loadResources(data, parameters)
 				if err != nil {
 					return err
 				}
@@ -99,7 +99,7 @@ func loadResourcesFromPath(path string) ([]runtime.RawExtension, error) {
 	return resources, err
 }
 
-func loadResources(data []byte) ([]runtime.RawExtension, error) {
+func loadResources(data []byte, parameters map[string]string) ([]runtime.RawExtension, error) {
 	var resources = []runtime.RawExtension{}
 	yamlsBytes := bytes.Split(data, YAMLSeparator)
 	for _, yamlBytes := range yamlsBytes {
@@ -107,6 +107,7 @@ func loadResources(data []byte) ([]runtime.RawExtension, error) {
 		if err != nil {
 			return nil, err
 		}
+		jsonBytes = replacePlaceholders(jsonBytes, parameters)
 		var j map[string]interface{}
 		json.Unmarshal(jsonBytes, &j)
 		kind, ok := j["kind"].(string)
@@ -120,6 +121,13 @@ func loadResources(data []byte) ([]runtime.RawExtension, error) {
 		}
 	}
 	return resources, nil
+}
+
+func replacePlaceholders(data []byte, parameters map[string]string) []byte {
+	for key, value := range parameters {
+		data = bytes.ReplaceAll(data, []byte("$VAR$"+key), []byte(value))
+	}
+	return data
 }
 
 func loadPatches(path string) ([]hivev1.SyncObjectPatch, error) {
@@ -200,10 +208,10 @@ func TransformSecrets(name, prefix, path string) []corev1.Secret {
 	return secrets
 }
 
-func CreateSelectorSyncSet(name, selector, resourcesPath, patchesPath string, stdin []byte) hivev1.SelectorSyncSet {
-	loadResourcesFunc := func()([]runtime.RawExtension, error) { return loadResourcesFromPath(resourcesPath) }
+func CreateSelectorSyncSet(name, selector, resourcesPath, patchesPath string, stdin []byte, parameters map[string]string) hivev1.SelectorSyncSet {
+	loadResourcesFunc := func()([]runtime.RawExtension, error) { return loadResourcesFromPath(resourcesPath, parameters) }
 	if stdin != nil {
-		loadResourcesFunc = func()([]runtime.RawExtension, error) { return loadResources(stdin) }
+		loadResourcesFunc = func()([]runtime.RawExtension, error) { return loadResources(stdin, parameters) }
 	}
 	resources, err := loadResourcesFunc()
 	if err != nil {
@@ -250,7 +258,8 @@ func CreateSelectorSyncSet(name, selector, resourcesPath, patchesPath string, st
 }
 
 func CreateSyncSet(name string, clusterName string, resourcesPath string, patchesPath string) hivev1.SyncSet {
-	resources, err := loadResourcesFromPath(resourcesPath)
+	parameters := make(map[string]string)
+	resources, err := loadResourcesFromPath(resourcesPath, parameters)
 	if err != nil {
 		log.Println(err)
 	}

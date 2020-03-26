@@ -22,11 +22,13 @@ func init() {
 	viewCmd.Flags().StringVarP(&output, "output", "o", "json", fmt.Sprintf("Output format. One of: %v", outputPrinters))
 	viewCmd.Flags().StringVarP(&input, "input", "i", "disk", fmt.Sprintf("Input source. One of: %v", inputSources))
 	viewCmd.Flags().BoolVarP(&wait, "wait", "w", false, "Last resource needs to wait for custom resource definition to be exposed")
+	viewCmd.Flags().StringVarP(&params, "parameters", "t", "", "Parameters to replace placeholders with")
 	RootCmd.AddCommand(viewCmd)
 }
 
-var selector, clusterName, resources, patches, name, output, input string
+var selector, clusterName, resources, patches, name, output, input, params string
 var wait bool
+var parameters map[string]string
 
 var outputPrinters = []string{"json", "yaml"}
 var inputSources = []string{"disk", "stdin"}
@@ -58,6 +60,12 @@ var viewCmd = &cobra.Command{
 			return fmt.Errorf("unsupported input source %s allowed input sources are: %v",
 				input, inputSources)
 		}
+		parameters = make(map[string]string)
+		if params != "" {
+			if err := json.Unmarshal([]byte(params), &parameters); err != nil {
+				return fmt.Errorf("failed to parse parameters \"%s\", should be json map", params)
+			}
+		}
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
@@ -73,11 +81,11 @@ var viewCmd = &cobra.Command{
 				if wait {
 					index := bytes.LastIndex(stdin, pkg.YAMLSeparator)
 					cr := stdin[index:]
-					create2 = func()interface{} { return pkg.CreateSelectorSyncSet(args[0]+"-cr", selector, resources, patches, cr) }
+					create2 = func()interface{} { return pkg.CreateSelectorSyncSet(args[0]+"-cr", selector, resources, patches, cr, parameters) }
 					stdin = stdin[:index]
 				}
 			}
-			create = func()interface{} { return pkg.CreateSelectorSyncSet(args[0], selector, resources, patches, stdin) }
+			create = func()interface{} { return pkg.CreateSelectorSyncSet(args[0], selector, resources, patches, stdin, parameters) }
 		}
 
 		secrets := pkg.TransformSecrets(args[0], prefix, resources)
