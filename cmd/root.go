@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/matt-simons/ss/pkg"
 	"github.com/spf13/cobra"
@@ -22,11 +23,12 @@ func init() {
 	viewCmd.Flags().StringVarP(&output, "output", "o", "json", fmt.Sprintf("Output format. One of: %v", outputPrinters))
 	viewCmd.Flags().StringVarP(&input, "input", "i", "disk", fmt.Sprintf("Input source. One of: %v", inputSources))
 	viewCmd.Flags().BoolVarP(&wait, "wait", "w", false, "Last resource needs to wait for custom resource definition to be exposed")
+	viewCmd.Flags().BoolVarP(&multiple, "multiple", "m", false, "Multiple SyncSets, one per file")
 	RootCmd.AddCommand(viewCmd)
 }
 
 var selector, clusterName, resources, patches, name, output, input string
-var wait bool
+var wait, multiple bool
 
 var outputPrinters = []string{"json", "yaml"}
 var inputSources = []string{"disk", "stdin"}
@@ -62,8 +64,8 @@ var viewCmd = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		prefix := "ss"
-		create := func()interface{} { return pkg.CreateSyncSet(args[0], clusterName, resources, patches) }
-		create2 := func()interface{} { return nil }
+		create := func()[]interface{} { return []interface{} { pkg.CreateSyncSet(args[0], clusterName, resources, patches) } }
+		create2 := func()[]interface{} { return nil }
 		// override for selectorsyncsets
 		if sss := (clusterName == ""); sss {
 			prefix = "sss"
@@ -73,11 +75,11 @@ var viewCmd = &cobra.Command{
 				if wait {
 					index := bytes.LastIndex(stdin, pkg.YAMLSeparator)
 					cr := stdin[index:]
-					create2 = func()interface{} { return pkg.CreateSelectorSyncSet(args[0]+"-cr", selector, resources, patches, cr) }
+					create2 = func()[]interface{} { return []interface{} {pkg.CreateSelectorSyncSet(args[0]+"-cr", selector, resources, patches, cr)} }
 					stdin = stdin[:index]
 				}
 			}
-			create = func()interface{} { return pkg.CreateSelectorSyncSet(args[0], selector, resources, patches, stdin) }
+			create = func()[]interface{} { return []interface{} {pkg.CreateSelectorSyncSet(args[0], selector, resources, patches, stdin)} }
 		}
 
 		secrets := pkg.TransformSecrets(args[0], prefix, resources)
@@ -88,11 +90,15 @@ var viewCmd = &cobra.Command{
 			}
 			fmt.Printf("%s\n", string(j))
 		}
-		ss := create()
-		fmt.Printf("%s", getOutputStr(ss))
+		a := []string{}
+		for _, ss := range create() {
+			a = append(a, getOutputStr(ss))
+		}
+		fmt.Printf(strings.Join(a, "---\n"))
 		if ss2 := create2(); ss2 != nil {
 			// assumed yaml output
-			fmt.Printf("---\n%s", getOutputStr(ss2))
+			fmt.Printf("---\n")
+			fmt.Printf("%s", getOutputStr(ss2))
 		}
 		fmt.Printf("\n\n")
 	},

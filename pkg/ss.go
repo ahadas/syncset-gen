@@ -84,11 +84,13 @@ func loadResourcesFromPath(path string) ([]runtime.RawExtension, error) {
 				return err
 			}
 			if strings.HasSuffix(p, ".yaml") {
+				fmt.Printf("%s\n", p)
 				data, err := ioutil.ReadFile(p)
 				if err != nil {
 					return err
 				}
 				fileResources, err := loadResources(data)
+				fmt.Printf("----- length: %d\n", len(fileResources))
 				if err != nil {
 					return err
 				}
@@ -96,6 +98,7 @@ func loadResourcesFromPath(path string) ([]runtime.RawExtension, error) {
 			}
 			return nil
 		})
+	fmt.Printf("length: %d\n", len(resources))
 	return resources, err
 }
 
